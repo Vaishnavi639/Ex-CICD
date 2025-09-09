@@ -1,0 +1,80 @@
+name: prod
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - main
+
+jobs:
+  build_and_deploy_job:
+    if: (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed'))  && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    name: Build and Deploy Job
+    permissions:
+       id-token: write
+       contents: read
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+          lfs: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Setup environment
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            cp .env.prod .env
+          else
+            echo "Unsupported branch for deployment"
+            exit 1
+          fi
+      - name: Build app for environment
+        run: |
+          echo "Branch: ${{ github.ref }}"
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            npm run build:prod
+          else
+            echo "Unsupported branch for deployment"
+            exit 1
+          fi
+      - name: Get Id Token
+        uses: actions/github-script@v6
+        id: idtoken
+        with:
+           script: |
+               return await core.getIDToken()
+           result-encoding: string
+
+      - name: Deploy to Azure Static Web Apps
+        id: builddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          action: "upload"
+          app_location: "/" 
+          api_location: "" 
+          output_location: "dist"
+          github_id_token: ${{ steps.idtoken.outputs.result }}
+          azure_static_web_apps_api_token: >-
+            ${{ 
+              github.ref == 'refs/heads/qa' && secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_GRAY_SKY_07F2DBC0F|| 
+              github.ref == 'refs/heads/main' && secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_FLOWER_06C17600F 
+            }}
+  close_pull_request_job:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    name: Close Pull Request Job
+    steps:
+      - name: Close Pull Request
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          action: "close"
