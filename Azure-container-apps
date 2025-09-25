@@ -8,10 +8,10 @@ on:
   workflow_dispatch:  # Add this for manual testing
 
 env:
-  SCRAPPER_CONTAINER_NAME: flask-image-scrapper
-  SCRAPPER_IMAGE_NAME: afto_image_scrapper
-  RESOURCE_GROUP: Afto-test-cloud-scale
-  IMAGE_NAME: aftoapp-d0hya5degbdcfzfd
+  SCRAPPER_CONTAINER_NAME: redact
+  SCRAPPER_IMAGE_NAME: redact
+  RESOURCE_GROUP: redact
+  IMAGE_NAME: redact
 
 jobs:
   build-and-deploy:
