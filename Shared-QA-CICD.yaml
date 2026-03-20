@@ -1,0 +1,81 @@
+name: QA CICD - Shared
+
+on:
+  workflow_dispatch:
+    inputs:
+      client:
+        description: 'Select client to deploy to QA'
+        required: true
+        type: choice
+        options:
+          - loyalty
+          - client-b        # replace with actual client name
+          - client-c        # replace with actual client name
+
+env:
+  WEBAPP_NAME: "afto-ecommerce-loyalty-feature"    # ⚠️ CRITICAL: shared QA app service — same for all
+  APPLICATION_PUBLISH_PROFILE: ${{ secrets.AZURE_LOYALTY }}  # ⚠️ CRITICAL: one secret since same app service
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set client config
+        id: config
+        run: |
+          if [ "${{ github.event.inputs.client }}" == "loyalty" ]; then
+            echo "BRANCH=feature/Loyality" >> $GITHUB_OUTPUT       # ⚠️ CRITICAL
+            echo "ENV_FILE=.env.qa" >> $GITHUB_OUTPUT              # ⚠️ CRITICAL
+            echo "BUILD_CMD=npm run build:qa" >> $GITHUB_OUTPUT    # ⚠️ CRITICAL
+
+          elif [ "${{ github.event.inputs.client }}" == "client-b" ]; then
+            echo "BRANCH=feature/client-b-qa" >> $GITHUB_OUTPUT    # ⚠️ CRITICAL: replace with actual branch
+            echo "ENV_FILE=.env.clientb.qa" >> $GITHUB_OUTPUT      # ⚠️ CRITICAL: replace with actual env file
+            echo "BUILD_CMD=npm run build:bbg/qa" >> $GITHUB_OUTPUT # ⚠️ CRITICAL: replace with actual build command
+
+          elif [ "${{ github.event.inputs.client }}" == "client-c" ]; then
+            echo "BRANCH=feature/client-c-qa" >> $GITHUB_OUTPUT    # ⚠️ CRITICAL: replace with actual branch
+            echo "ENV_FILE=.env.clientc.qa" >> $GITHUB_OUTPUT      # ⚠️ CRITICAL: replace with actual env file
+            echo "BUILD_CMD=npm run build:clientc/qa" >> $GITHUB_OUTPUT # ⚠️ CRITICAL: replace with actual build command
+          fi
+
+      - name: Checkout client branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.config.outputs.BRANCH }}                   # ⚠️ CRITICAL
+
+      - name: Set up Node.js version
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Copy QA environment file
+        run: |
+          cp ${{ steps.config.outputs.ENV_FILE }} .env              # ⚠️ CRITICAL
+          echo "Using QA environment for ${{ github.event.inputs.client }}"
+
+      - name: npm install and build
+        run: |
+          npm install
+          ${{ steps.config.outputs.BUILD_CMD }}                     # ⚠️ CRITICAL: runs client-specific build command
+          mv ./build/static ./build/standalone/build
+          mv ./public ./build/standalone
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.WEBAPP_NAME }}
+          slot-name: "Production"
+          publish-profile: ${{ env.APPLICATION_PUBLISH_PROFILE }}   # same secret for all — shared app service
+          package: ./build/standalone
+```
+
+---
+
+## What you fill in per client — just 3 things
+```
+BRANCH=feature/????
+ENV_FILE=.env.???
+BUILD_CMD=npm run build:???
